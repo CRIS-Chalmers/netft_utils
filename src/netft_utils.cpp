@@ -77,7 +77,7 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   cutoffFrequency(0.0),
   newFilter(false),
   isBiased(false),
-  isGravityBiased(false),
+  isGravityBiased(true),  // TODO: are the values for weight and lever arm correct?
   isNewBias(false),
   isNewGravityBias(false),
   cancel_count(MAX_CANCEL),
@@ -86,8 +86,8 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   torqueMaxB(0.8),
   forceMaxU(50.0),
   torqueMaxU(5.0),
-  payloadWeight(0.),
-  payloadLeverArm(0.)
+  payloadWeight(0.1), // TODO: what is the weight???
+  payloadLeverArm(0.03)  // TODO: what is the lever arm???
 {
 }
 
