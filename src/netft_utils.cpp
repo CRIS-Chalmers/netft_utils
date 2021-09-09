@@ -77,7 +77,7 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   cutoffFrequency(0.0),
   newFilter(false),
   isBiased(false),
-  isGravityBiased(true),  // TODO: are the values for weight and lever arm correct?
+  isGravityBiased(false),  // TODO: are the values for weight and lever arm correct?
   isNewBias(false),
   isNewGravityBias(false),
   cancel_count(MAX_CANCEL),
@@ -86,8 +86,8 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   torqueMaxB(0.8),
   forceMaxU(50.0),
   torqueMaxU(5.0),
-  payloadWeight(0.1), // TODO: what is the weight???
-  payloadLeverArm(0.03)  // TODO: what is the lever arm???
+  payloadWeight(0.0), // TODO: what is the weight???
+  payloadLeverArm(0.0)  // TODO: what is the lever arm???
 {
 }
 
@@ -122,7 +122,7 @@ void NetftUtils::initialize()
   netft_raw_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("raw_world", 100000);
   netft_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_world", 100000);
   netft_tool_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_tool", 100000);
-  netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000);
+  netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000); 
 
   //Advertise bias and threshold services
   bias_service = n.advertiseService("bias", &NetftUtils::fixedOrientationBias, this);
@@ -241,10 +241,10 @@ void NetftUtils::netftCallback(const geometry_msgs::WrenchStamped::ConstPtr& dat
   // Filter data
   std::vector<double> tempData;
   tempData.resize(6);
-  tempData.at(0) = -data->wrench.force.x;
+  tempData.at(0) = data->wrench.force.x;
   tempData.at(1) = data->wrench.force.y;
   tempData.at(2) = data->wrench.force.z;
-  tempData.at(3) = -data->wrench.torque.x;
+  tempData.at(3) = data->wrench.torque.x;
   tempData.at(4) = data->wrench.torque.y;
   tempData.at(5) = data->wrench.torque.z;
   
@@ -276,9 +276,11 @@ void NetftUtils::netftCallback(const geometry_msgs::WrenchStamped::ConstPtr& dat
       tf_data_tool.wrench.torque.y = tf_data_tool.wrench.torque.y - gravMomentY;
     
       // Convert to world to account for the gravity force. Assumes world-Z is up.
-      //ROS_INFO_STREAM("gravity force in the world Z axis: "<< payloadWeight);
+      //ROS_INFO_STREAM("payloadWeight: "<< payloadWeight<<" payloadLeverArm: "<<payloadLeverArm<<" tf_data_world.wrench.force.z: "<<tf_data_world.wrench.force.z);
       transformFrame(tf_data_tool, tf_data_world, 'w');
       tf_data_world.wrench.force.z = tf_data_world.wrench.force.z - payloadWeight;
+      //ROS_INFO_STREAM(" tf_data_world.wrench.force.z: "<<tf_data_world.wrench.force.z );
+
     
       // tf_data_world now accounts for gravity completely. Convert back to the tool frame to make that data available, too
       transformFrame(tf_data_world, tf_data_tool, 't');
