@@ -9,6 +9,7 @@
 #include "netft_utils/SetMax.h"
 #include "netft_utils/SetThreshold.h"
 #include "netft_utils/SetToolData.h"
+#include "netft_utils/SetBiasData.h"
 #include "netft_utils/SetFilter.h"
 #include "netft_utils/GetDouble.h"
 #include "netft_utils/Cancel.h"
@@ -92,6 +93,8 @@ private:
   ros::ServiceServer set_max_service;
   ros::ServiceServer theshold_service;
   ros::ServiceServer weight_bias_service;
+  ros::ServiceServer set_tool_data;
+  ros::ServiceServer set_bias_data;
   ros::ServiceServer get_weight_service;
   ros::ServiceServer filter_service;
 
@@ -113,6 +116,8 @@ private:
   // Run this method when the sensor is stationary to avoid inertial effects.
   // It assumes the Z-axis of the World tf frame is up.
   bool compensateForGravity(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res);
+  bool settooldata(netft_utils::SetToolData::Request &req, netft_utils::SetToolData::Response &res);
+  bool setbiasdata(netft_utils::SetBiasData::Request &req, netft_utils::SetBiasData::Response &res);
   
   bool setMax(netft_utils::SetMax::Request &req, netft_utils::SetMax::Response &res);
   bool setWeightBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res);

@@ -41,6 +41,7 @@ add_service_files(
     SetMax.srv
     SetThreshold.srv
     SetToolData.srv
+    SetBiasData.srv
     GetDouble.srv
     StartSim.srv
     StopSim.srv
