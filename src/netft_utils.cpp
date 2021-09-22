@@ -335,15 +335,59 @@ void NetftUtils::netftCallback(const geometry_msgs::WrenchStamped::ConstPtr& dat
 bool NetftUtils::fixedOrientationBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res)
 {                 
   if(req.toBias)  
-  {           
-    copyWrench(tf_data_tool, bias, zero_wrench); // Store the current wrench readings in the 'bias' variable, to be applied hereafter
+  { 
+
+    if(isBiased)
+    {
+      copyWrench(zero_wrench, bias, zero_wrench);
+      isBiased = false;
+      //ROS_INFO_STREAM("Delete old bias.");
+    }
+
+    ROS_INFO_STREAM("wait 5 sec for Bias calibaration...");
+
+    double fx = 0;
+    double fy = 0;
+    double fz = 0;
+    double tx = 0;
+    double ty = 0;
+    double tz = 0;
+
+    int numMeasurments = 200;
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_tool.wrench.force.x;
+      fy = fy + tf_data_tool.wrench.force.y;
+      fz = fz + tf_data_tool.wrench.force.z;
+      tx = tx + tf_data_tool.wrench.torque.x;
+      ty = ty + tf_data_tool.wrench.torque.y;
+      tz = tz + tf_data_tool.wrench.torque.z;
+
+      ros::Duration(0.01).sleep();
+    }
+
+    bias.header.stamp = tf_data_tool.header.stamp;
+    bias.header.frame_id = tf_data_tool.header.frame_id;
+    bias.wrench.force.x = fx/numMeasurments;
+    bias.wrench.force.y = fy/numMeasurments;
+    bias.wrench.force.z = fz/numMeasurments;
+    bias.wrench.torque.x = tx/numMeasurments;
+    bias.wrench.torque.y = ty/numMeasurments;
+    bias.wrench.torque.z = tz/numMeasurments;
+
+
+            
+    //copyWrench(tf_data_tool, bias, zero_wrench); // Store the current wrench readings in the 'bias' variable, to be applied hereafter
     if(req.forceMax >= 0.0001) // if forceMax was specified and > 0
       forceMaxB = req.forceMax;
     if(req.torqueMax >= 0.0001)
       torqueMaxB = req.torqueMax; // if torqueMax was specified and > 0
     
-    isNewBias = true;
+    //isNewBias = true;
     isBiased = true;
+
+    ROS_INFO_STREAM("Bias calibaration done! Bias: \n"  << bias.wrench );
   }               
   else            
   {               
