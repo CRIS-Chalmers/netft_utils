@@ -341,7 +341,7 @@ bool NetftUtils::fixedOrientationBias(netft_utils::SetBias::Request &req, netft_
     {
       copyWrench(zero_wrench, bias, zero_wrench);
       isBiased = false;
-      //ROS_INFO_STREAM("Delete old bias.");
+      ROS_INFO_STREAM("Delete old bias.");
     }
 
     ROS_INFO_STREAM("wait 5 sec for Bias calibaration...");
