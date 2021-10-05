@@ -25,6 +25,7 @@ LPFilter::LPFilter(double deltaT, double cutoffFrequency, int numElements):
   b1(0.0),
   b2(0.0)
 {
+
   initialized = true;
   if(numElements<=0)
   {

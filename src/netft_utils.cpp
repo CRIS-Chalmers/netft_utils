@@ -155,9 +155,9 @@ void NetftUtils::update()
   
   // Check for a filter
   if(newFilter)
-  {
-    delete lp;
-    lp = new LPFilter(deltaTFilter,cutoffFrequency,6);
+  {   
+    //delete lp;
+    lp = new LPFilter(deltaTFilter,cutoffFrequency,6);   
     newFilter = false;
   }
   
@@ -486,9 +486,10 @@ bool NetftUtils::setbiasdata(netft_utils::SetBiasData::Request &req, netft_utils
 
 
 bool NetftUtils::setFilter(netft_utils::SetFilter::Request &req, netft_utils::SetFilter::Response &res)
-{                 
+{            
   if(req.toFilter)  
   {
+    
     newFilter = true;
     isFilterOn = true;
     deltaTFilter = req.deltaT;
@@ -514,7 +515,8 @@ bool NetftUtils::setMax(netft_utils::SetMax::Request &req, netft_utils::SetMax::
 }
 
 bool NetftUtils::setWeightBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res)
-{                 
+{           
+  ROS_INFO_STREAM("request to bias");      
   if(req.toBias)  
   {               
     copyWrench(raw_data_tool, weight_bias, zero_wrench);
