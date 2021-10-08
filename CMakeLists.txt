@@ -16,7 +16,10 @@ find_package(catkin REQUIRED COMPONENTS
   diagnostic_msgs
   geometry_msgs
   std_msgs
+  message_generation
+  controller
 )
+
 
 find_package(Boost REQUIRED COMPONENTS
   system
@@ -24,7 +27,7 @@ find_package(Boost REQUIRED COMPONENTS
   program_options
 )
 
-find_package(catkin REQUIRED COMPONENTS genmsg std_msgs tf message_generation)
+find_package(catkin REQUIRED COMPONENTS genmsg std_msgs tf message_generation controller)
 
 include_directories(
   include ${Boost_INCLUDE_DIRS}
@@ -38,6 +41,7 @@ add_service_files(
     FILES
     SetBias.srv
     SetFilter.srv
+    FindToolParams.srv
     SetMax.srv
     SetThreshold.srv
     SetToolData.srv
@@ -53,7 +57,7 @@ catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS message_runtime
   LIBRARIES netft_utils_lean lpfilter
-  DEPENDS
+  DEPENDS controller
 )
 
 link_directories(${catkin_LIBRARY_DIRS})
@@ -110,4 +114,11 @@ install(DIRECTORY include/
 )
 install(DIRECTORY launch
 	DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+catkin_install_python(
+  PROGRAMS 
+  src/find_Tool_Params.py
+
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

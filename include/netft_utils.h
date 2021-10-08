@@ -6,6 +6,7 @@
 #include "tf/transform_listener.h"
 #include "geometry_msgs/WrenchStamped.h"
 #include "netft_utils/SetBias.h"
+#include "netft_utils/FindToolParams.h"
 #include "netft_utils/SetMax.h"
 #include "netft_utils/SetThreshold.h"
 #include "netft_utils/SetToolData.h"
@@ -84,6 +85,7 @@ private:
   ros::Publisher netft_world_data_pub;
   ros::Publisher netft_tool_data_pub;
   ros::Publisher netft_cancel_pub;
+  ros::Publisher trajectory_pub;
   
   ////////////////
   // ROS services
@@ -95,6 +97,7 @@ private:
   ros::ServiceServer weight_bias_service;
   ros::ServiceServer set_tool_data;
   ros::ServiceServer set_bias_data;
+  ros::ServiceServer find_tool_params;
   ros::ServiceServer get_weight_service;
   ros::ServiceServer filter_service;
 
@@ -109,6 +112,8 @@ private:
   // This doesn't account for gravity i.e. it will not change if the sensor's orientation changes.
   // Run this method when the sensor is stationary to avoid inertial effects.
   bool fixedOrientationBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res);
+
+  bool findToolParams(netft_utils::FindToolParams::Request &req, netft_utils::FindToolParams::Response &res);
   
   // Set the readings from the sensor to zero at this instant.
   // Calculate the payload's mass and center of mass so gravity can be compensated for, even as the sensor changes orientation.

@@ -15,6 +15,11 @@ Authors: Alex von Sternberg, Andy Zelenak
 */
 
 #include "netft_utils.h"
+#include <controller/Trajectory_msg.h>
+#include <controller/Trajectory_point.h>
+#include <math.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <cmath> 
 
 int main(int argc, char **argv)
 {
@@ -26,6 +31,7 @@ int main(int argc, char **argv)
   NetftUtils utils(n);
   ros::AsyncSpinner spinner(1);
   spinner.start();
+
 
   // Initialize utils
   utils.initialize();
@@ -122,13 +128,17 @@ void NetftUtils::initialize()
   netft_raw_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("raw_world", 100000);
   netft_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_world", 100000);
   netft_tool_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_tool", 100000);
-  netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000); 
+  netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000);
+  // Initialize YuMi trajectory publischer
+  trajectory_pub = n.advertise<controller::Trajectory_msg>("/Trajectroy", 1);
 
   //Advertise bias and threshold services
   bias_service = n.advertiseService("bias", &NetftUtils::fixedOrientationBias, this);
   gravity_comp_service = n.advertiseService("gravity_comp", &NetftUtils::compensateForGravity, this);
   set_tool_data = n.advertiseService("set_tool_data", &NetftUtils::settooldata, this);
   set_bias_data = n.advertiseService("set_bias_data", &NetftUtils::setbiasdata, this);
+  find_tool_params = n.advertiseService("find_tool_params", &NetftUtils::findToolParams, this);
+  
   set_max_service = n.advertiseService("set_max_values", &NetftUtils::setMax, this);
   theshold_service = n.advertiseService("set_threshold", &NetftUtils::setThreshold, this);
   weight_bias_service = n.advertiseService("set_weight_bias", &NetftUtils::setWeightBias, this);
@@ -485,6 +495,9 @@ bool NetftUtils::setbiasdata(netft_utils::SetBiasData::Request &req, netft_utils
 }
 
 
+
+
+
 bool NetftUtils::setFilter(netft_utils::SetFilter::Request &req, netft_utils::SetFilter::Response &res)
 {            
   if(req.toFilter)  
@@ -588,7 +601,9 @@ void NetftUtils::checkMaxForce()
   else if(cancel_count == 0 && cancel_wait > 0 && cancel_wait <= MAX_WAIT)
   {
     cancel_msg.toCancel = false;
-    cancel_wait-=1;
+    cancel_wait-=1;  // Initialize YuMi trajectory publischer
+  ros::Publisher trajectory_pub = n.advertise<controller::Trajectory_msg>("trajectory", 1);
+
   }
   // If we have just finished waiting MAX_WAIT times, or the max force is no longer exceeded, reset cancel_count and cancel_wait
   else if(cancel_wait == 0 || !(fabs(fMag) > fMax || fabs(tMag) > tMax))
@@ -599,3 +614,203 @@ void NetftUtils::checkMaxForce()
   }
 }               
                   
+
+
+// procces to find exact tool data
+bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft_utils::FindToolParams::Response &res)
+{                 
+  if(req.toDrive)  
+  { 
+
+    if(isBiased)
+    {
+      copyWrench(zero_wrench, bias, zero_wrench);
+      isBiased = false;
+      ROS_INFO_STREAM("Delete old bias.");
+    }
+
+    if(isGravityBiased)
+    { 
+      payloadWeight = 0;
+      payloadLeverArm = 0;
+      copyWrench(zero_wrench, bias, zero_wrench);
+      isGravityBiased = false;
+      ROS_INFO_STREAM("Delete old tool values.");
+    }
+
+    ROS_INFO_STREAM("YuMi will drive. Wait for calibaration...");
+    double fx = 0;
+    double fy = 0;
+    double fz = 0;
+    double mx = 0;
+    double my = 0;
+    double mz = 0;
+
+    int numMeasurments = 500;
+
+
+
+    controller::Trajectory_msg trajectory_msg;
+    controller::Trajectory_point trajectory_point;
+
+    trajectory_msg.header.stamp = ros::Time::now();
+    trajectory_msg.mode = "individual"; // control mode
+
+    trajectory_point.positionRight = {0.50, -0.4, 0.3};  // poition right arm [m], yumi_base_link is the origin 
+    trajectory_point.positionLeft = {0.50, 0.4, 0.3};  // poition left arm [m]
+    // Z down
+    trajectory_point.orientationLeft = {1, 0, 0, 0};// orientation left arm, quaterniorns [x, y, z, w]
+    trajectory_point.orientationRight = {1, 0, 0, 0}; // orientation right arm
+      
+    trajectory_point.pointTime = 10.0; // time to get to this point [s]
+
+    trajectory_msg.trajectory = {trajectory_point};
+    trajectory_pub.publish(trajectory_msg);
+    ros::Duration(0.1).sleep(); // sleep 
+    trajectory_pub.publish(trajectory_msg);
+
+
+    ros::Duration(20.0).sleep(); // sleep
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_world.wrench.force.x;
+      fy = fy + tf_data_world.wrench.force.y;
+      fz = fz + tf_data_world.wrench.force.z;
+    }
+
+    ROS_INFO_STREAM("Done 1/6");
+
+    // X down
+    trajectory_msg.header.stamp = ros::Time::now();
+    
+    trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
+    trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
+    trajectory_point.orientationLeft = {0.0, 0.707, 0.0 , 0.707};// orientation left arm, quaterniorns [x, y, z, w]
+    trajectory_point.orientationRight = {0.0, 0.707, 0.0 , 0.707}; // orientation right arm
+    //trajectory_point.pointTime = 10.0; // time to get to this point [s]
+    trajectory_msg.trajectory = {trajectory_point};
+    trajectory_pub.publish(trajectory_msg);
+    //ros::Duration(0.1).sleep(); // sleep 
+    trajectory_pub.publish(trajectory_msg);
+
+    ros::Duration(20.0).sleep(); // sleep
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_world.wrench.force.x;
+      fy = fy + tf_data_world.wrench.force.y;
+      fz = fz + tf_data_world.wrench.force.z;
+      mx = mx + tf_data_world.wrench.torque.x;
+      my = my + tf_data_world.wrench.torque.y;
+      mz = mz + tf_data_world.wrench.torque.z;
+    }
+    ROS_INFO_STREAM("Done 2/6");
+
+    // Y Down
+    trajectory_msg.header.stamp = ros::Time::now();
+
+    trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
+    trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
+    trajectory_point.orientationLeft = {-0.5, 0.5, -0.5, 0.5};// orientation left arm, quaterniorns [x, y, z, w]
+    trajectory_point.orientationRight = {-0.5, 0.5, -0.5, 0.5}; // orientation right arm
+    trajectory_msg.trajectory = {trajectory_point};
+    trajectory_pub.publish(trajectory_msg);
+
+    ros::Duration(20.0).sleep(); // sleep
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_world.wrench.force.x;
+      fy = fy + tf_data_world.wrench.force.y;
+      fz = fz + tf_data_world.wrench.force.z;
+      mx = mx + tf_data_world.wrench.torque.x;
+      my = my + tf_data_world.wrench.torque.y;
+      mz = mz + tf_data_world.wrench.torque.z;
+    }
+    
+    ROS_INFO_STREAM("Done 3/6");
+
+    // X Up
+    trajectory_msg.header.stamp = ros::Time::now();
+    
+    trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
+    trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
+    trajectory_point.orientationLeft = {-0.707, 0.0, -0.707, 0.0};// orientation left arm, quaterniorns [x, y, z, w]
+    trajectory_point.orientationRight = {-0.707, 0.0, -0.707, 0.0}; // orientation right arm
+    trajectory_msg.trajectory = {trajectory_point};
+    trajectory_pub.publish(trajectory_msg);
+
+    ros::Duration(20.0).sleep(); // sleep
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_world.wrench.force.x;
+      fy = fy + tf_data_world.wrench.force.y;
+      fz = fz + tf_data_world.wrench.force.z;
+      mx = mx + tf_data_world.wrench.torque.x;
+      my = my + tf_data_world.wrench.torque.y;
+      mz = mz + tf_data_world.wrench.torque.z;
+    }
+
+    ROS_INFO_STREAM("Done 4/6");
+
+    // Y Up
+    trajectory_msg.header.stamp = ros::Time::now();
+
+    trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
+    trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
+    trajectory_point.orientationLeft = {0.5, 0.5, 0.5, 0.5};// orientation left arm, quaterniorns [x, y, z, w]
+    trajectory_point.orientationRight = {0.5, 0.5, 0.5, 0.5}; // orientation right arm
+    trajectory_msg.trajectory = {trajectory_point};
+    trajectory_pub.publish(trajectory_msg);
+
+    ros::Duration(20.0).sleep(); // sleep
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_world.wrench.force.x;
+      fy = fy + tf_data_world.wrench.force.y;
+      fz = fz + tf_data_world.wrench.force.z;
+      mx = mx + tf_data_world.wrench.torque.x;
+      my = my + tf_data_world.wrench.torque.y;
+      mz = mz + tf_data_world.wrench.torque.z;
+    }
+    ROS_INFO_STREAM("Done 5/6");
+
+    // Z Up
+    trajectory_msg.header.stamp = ros::Time::now();
+
+    trajectory_point.positionRight = {0.50, -0.3, 0.5};  // poition right arm [m], yumi_base_link is the origin 
+    trajectory_point.positionLeft = {0.50, 0.3, 0.5};  // poition left arm [m]
+    trajectory_point.orientationLeft = {0, 0, -1, 0};// orientation left arm, quaterniorns [x, y, z, w]
+    trajectory_point.orientationRight = {0, 0, -1, 0}; // orientation right arm
+    trajectory_msg.trajectory = {trajectory_point};
+    trajectory_pub.publish(trajectory_msg);
+    trajectory_point.pointTime = 20.0; // time to get to this point [s]
+
+    ros::Duration(30.0).sleep(); // sleep 
+
+    for (int i = 0; i <= numMeasurments; i++)
+    {
+      fx = fx + tf_data_world.wrench.force.x;
+      fy = fy + tf_data_world.wrench.force.y;
+      fz = fz + tf_data_world.wrench.force.z;
+    }
+    ROS_INFO_STREAM("Done 6/6");
+
+    
+    double force = std::abs(fx/(6*numMeasurments)) + std::abs(fy/(6*numMeasurments)) + std::abs(fz/(6*numMeasurments));
+    double leverarm = my/(4*numMeasurments*force);
+
+    ROS_INFO_STREAM("Force in N: "<<force<<"  Lever arm in mm: "<<leverarm);
+    payloadWeight = force;
+    payloadLeverArm = leverarm;
+
+    
+  }
+  res.success = true;
+
+                  
+  return true;    
+}
