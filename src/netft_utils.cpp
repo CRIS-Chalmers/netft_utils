@@ -616,7 +616,7 @@ void NetftUtils::checkMaxForce()
                   
 
 
-// procces to find exact tool data
+// procces to find exact tool data for YuMi use controller https://github.com/CRIS-Chalmers/yumi.git
 bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft_utils::FindToolParams::Response &res)
 {                 
   if(req.toDrive)  
@@ -639,81 +639,63 @@ bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft
     }
 
     ROS_INFO_STREAM("YuMi will drive. Wait for calibaration...");
-    double fx = 0;
-    double fy = 0;
     double fz = 0;
-    double mx = 0;
-    double my = 0;
-    double mz = 0;
+    double m = 0;
 
     int numMeasurments = 500;
-
-
 
     controller::Trajectory_msg trajectory_msg;
     controller::Trajectory_point trajectory_point;
 
-    trajectory_msg.header.stamp = ros::Time::now();
+    
     trajectory_msg.mode = "individual"; // control mode
 
+    // 1. Z down -----------------------------------------------------------------------------
+    trajectory_msg.header.stamp = ros::Time::now();
     trajectory_point.positionRight = {0.50, -0.4, 0.3};  // poition right arm [m], yumi_base_link is the origin 
     trajectory_point.positionLeft = {0.50, 0.4, 0.3};  // poition left arm [m]
-    // Z down
     trajectory_point.orientationLeft = {1, 0, 0, 0};// orientation left arm, quaterniorns [x, y, z, w]
     trajectory_point.orientationRight = {1, 0, 0, 0}; // orientation right arm
-      
     trajectory_point.pointTime = 10.0; // time to get to this point [s]
-
     trajectory_msg.trajectory = {trajectory_point};
     trajectory_pub.publish(trajectory_msg);
-    ros::Duration(0.1).sleep(); // sleep 
-    trajectory_pub.publish(trajectory_msg);
-
 
     ros::Duration(20.0).sleep(); // sleep
 
     for (int i = 0; i <= numMeasurments; i++)
     {
-      fx = fx + tf_data_world.wrench.force.x;
-      fy = fy + tf_data_world.wrench.force.y;
       fz = fz + tf_data_world.wrench.force.z;
     }
 
-    ROS_INFO_STREAM("Done 1/6");
+    ROS_INFO_STREAM("Done z down 1/6");
 
-    // X down
+    // 2. X down -----------------------------------------------------------------------------
+
     trajectory_msg.header.stamp = ros::Time::now();
-    
     trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
     trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
     trajectory_point.orientationLeft = {0.0, 0.707, 0.0 , 0.707};// orientation left arm, quaterniorns [x, y, z, w]
     trajectory_point.orientationRight = {0.0, 0.707, 0.0 , 0.707}; // orientation right arm
-    //trajectory_point.pointTime = 10.0; // time to get to this point [s]
+    trajectory_point.pointTime = 10.0; // time to get to this point [s]
     trajectory_msg.trajectory = {trajectory_point};
-    trajectory_pub.publish(trajectory_msg);
-    //ros::Duration(0.1).sleep(); // sleep 
     trajectory_pub.publish(trajectory_msg);
 
     ros::Duration(20.0).sleep(); // sleep
 
     for (int i = 0; i <= numMeasurments; i++)
     {
-      fx = fx + tf_data_world.wrench.force.x;
-      fy = fy + tf_data_world.wrench.force.y;
       fz = fz + tf_data_world.wrench.force.z;
-      mx = mx + tf_data_world.wrench.torque.x;
-      my = my + tf_data_world.wrench.torque.y;
-      mz = mz + tf_data_world.wrench.torque.z;
+      m = m + tf_data_world.wrench.torque.y;
     }
-    ROS_INFO_STREAM("Done 2/6");
+    ROS_INFO_STREAM("Done x down 2/6");
 
-    // Y Down
+    // 3. Y down -----------------------------------------------------------------------------
     trajectory_msg.header.stamp = ros::Time::now();
-
     trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
     trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
     trajectory_point.orientationLeft = {-0.5, 0.5, -0.5, 0.5};// orientation left arm, quaterniorns [x, y, z, w]
     trajectory_point.orientationRight = {-0.5, 0.5, -0.5, 0.5}; // orientation right arm
+    trajectory_point.pointTime = 10.0; // time to get to this point [s]
     trajectory_msg.trajectory = {trajectory_point};
     trajectory_pub.publish(trajectory_msg);
 
@@ -721,23 +703,19 @@ bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft
 
     for (int i = 0; i <= numMeasurments; i++)
     {
-      fx = fx + tf_data_world.wrench.force.x;
-      fy = fy + tf_data_world.wrench.force.y;
       fz = fz + tf_data_world.wrench.force.z;
-      mx = mx + tf_data_world.wrench.torque.x;
-      my = my + tf_data_world.wrench.torque.y;
-      mz = mz + tf_data_world.wrench.torque.z;
+      m = m + tf_data_world.wrench.torque.y;
     }
     
-    ROS_INFO_STREAM("Done 3/6");
+    ROS_INFO_STREAM("Done y down 3/6");
 
-    // X Up
+    // 4. X up -----------------------------------------------------------------------------
     trajectory_msg.header.stamp = ros::Time::now();
-    
     trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
     trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
     trajectory_point.orientationLeft = {-0.707, 0.0, -0.707, 0.0};// orientation left arm, quaterniorns [x, y, z, w]
     trajectory_point.orientationRight = {-0.707, 0.0, -0.707, 0.0}; // orientation right arm
+    trajectory_point.pointTime = 10.0; // time to get to this point [s]
     trajectory_msg.trajectory = {trajectory_point};
     trajectory_pub.publish(trajectory_msg);
 
@@ -745,23 +723,19 @@ bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft
 
     for (int i = 0; i <= numMeasurments; i++)
     {
-      fx = fx + tf_data_world.wrench.force.x;
-      fy = fy + tf_data_world.wrench.force.y;
       fz = fz + tf_data_world.wrench.force.z;
-      mx = mx + tf_data_world.wrench.torque.x;
-      my = my + tf_data_world.wrench.torque.y;
-      mz = mz + tf_data_world.wrench.torque.z;
+      m = m + tf_data_world.wrench.torque.y;
     }
 
-    ROS_INFO_STREAM("Done 4/6");
+    ROS_INFO_STREAM("Done x up 4/6");
 
-    // Y Up
+    // 5. Y up -----------------------------------------------------------------------------
     trajectory_msg.header.stamp = ros::Time::now();
-
     trajectory_point.positionRight = {0.60, -0.4, 0.4};  // poition right arm [m], yumi_base_link is the origin 
     trajectory_point.positionLeft = {0.60, 0.4, 0.4};  // poition left arm [m]
     trajectory_point.orientationLeft = {0.5, 0.5, 0.5, 0.5};// orientation left arm, quaterniorns [x, y, z, w]
     trajectory_point.orientationRight = {0.5, 0.5, 0.5, 0.5}; // orientation right arm
+    trajectory_point.pointTime = 10.0; // time to get to this point [s]
     trajectory_msg.trajectory = {trajectory_point};
     trajectory_pub.publish(trajectory_msg);
 
@@ -769,44 +743,37 @@ bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft
 
     for (int i = 0; i <= numMeasurments; i++)
     {
-      fx = fx + tf_data_world.wrench.force.x;
-      fy = fy + tf_data_world.wrench.force.y;
       fz = fz + tf_data_world.wrench.force.z;
-      mx = mx + tf_data_world.wrench.torque.x;
-      my = my + tf_data_world.wrench.torque.y;
-      mz = mz + tf_data_world.wrench.torque.z;
+      m = m + tf_data_world.wrench.torque.y;
     }
-    ROS_INFO_STREAM("Done 5/6");
+    ROS_INFO_STREAM("Done y up 5/6");
 
-    // Z Up
+    // 6. Z up -----------------------------------------------------------------------------
     trajectory_msg.header.stamp = ros::Time::now();
 
     trajectory_point.positionRight = {0.50, -0.3, 0.5};  // poition right arm [m], yumi_base_link is the origin 
     trajectory_point.positionLeft = {0.50, 0.3, 0.5};  // poition left arm [m]
     trajectory_point.orientationLeft = {0, 0, -1, 0};// orientation left arm, quaterniorns [x, y, z, w]
     trajectory_point.orientationRight = {0, 0, -1, 0}; // orientation right arm
+    trajectory_point.pointTime = 10.0; // time to get to this point [s]
     trajectory_msg.trajectory = {trajectory_point};
     trajectory_pub.publish(trajectory_msg);
-    trajectory_point.pointTime = 20.0; // time to get to this point [s]
 
-    ros::Duration(30.0).sleep(); // sleep 
+    ros::Duration(20.0).sleep(); // sleep 
 
     for (int i = 0; i <= numMeasurments; i++)
     {
-      fx = fx + tf_data_world.wrench.force.x;
-      fy = fy + tf_data_world.wrench.force.y;
       fz = fz + tf_data_world.wrench.force.z;
     }
-    ROS_INFO_STREAM("Done 6/6");
+    ROS_INFO_STREAM("Done z up 6/6");
 
     
-    double force = std::abs(fx/(6*numMeasurments)) + std::abs(fy/(6*numMeasurments)) + std::abs(fz/(6*numMeasurments));
-    double leverarm = my/(4*numMeasurments*force);
+    double force = std::abs(fz/(6*numMeasurments));
+    double leverarm = m/(4*numMeasurments*force);
 
     ROS_INFO_STREAM("Force in N: "<<force<<"  Lever arm in mm: "<<leverarm);
     payloadWeight = force;
     payloadLeverArm = leverarm;
-
     
   }
   res.success = true;
