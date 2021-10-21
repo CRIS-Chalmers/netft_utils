@@ -1,5 +1,8 @@
-int32 simDim
-int32 simType
-float64 simSlope
-float64 maxForce
+float64 ropeLength
+float64 springConstant
+float64 ropeWeight
+string frame
+float64 x
+float64 y
+float64 z
 ---

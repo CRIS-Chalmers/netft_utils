@@ -37,16 +37,15 @@ int main(int argc, char **argv)
   utils.initialize();
 
   // Set up user input
-  std::string world_frame;
-  std::string ft_frame;
-  double forceMaxU = 0.0;
-  double torqueMaxU = 0.0;
+  std::string world_frame = "world";
+  std::string ft_frame = "ftsensor_l";
+
   if(argc<3)
   {
-    ROS_FATAL("You must pass in at least the world and ft frame as command line arguments. Argument options are [world frame, ft frame, max force, max torque]");
+    ROS_FATAL("You must pass in at least the world and ft frame as command line arguments.");
     return 1;
   }
-  else if(argc>=6)
+  else if(argc>=4)
   {
     ROS_FATAL("Too many arguments for netft_utils");
   }
@@ -54,12 +53,8 @@ int main(int argc, char **argv)
   {
     world_frame = argv[1];
     ft_frame = argv[2];
-    if(argc>=4)
-      forceMaxU = atof(argv[3]);
-    if(5==argc)
-      torqueMaxU = atof(argv[4]);
   }
-  utils.setUserInput(world_frame, ft_frame, forceMaxU, torqueMaxU);
+  utils.setUserInput(world_frame, ft_frame);
 
   // Main ros loop
   ros::Rate loop_rate(500);
@@ -83,7 +78,7 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   cutoffFrequency(0.0),
   newFilter(false),
   isBiased(false),
-  isGravityBiased(true),  // TODO: are the values for weight and lever arm correct?
+  isGravityBiased(false),
   isNewBias(false),
   isNewGravityBias(false),
   cancel_count(MAX_CANCEL),
@@ -92,8 +87,8 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   torqueMaxB(0.8),
   forceMaxU(50.0),
   torqueMaxU(5.0),
-  payloadWeight(0.2), // TODO: what is the weight???
-  payloadLeverArm(0.2)  // TODO: what is the lever arm???
+  payloadWeight(0.2),
+  payloadLeverArm(0.2)
 {
 }
 
@@ -138,30 +133,19 @@ void NetftUtils::initialize()
   set_tool_data = n.advertiseService("set_tool_data", &NetftUtils::settooldata, this);
   set_bias_data = n.advertiseService("set_bias_data", &NetftUtils::setbiasdata, this);
   find_tool_params = n.advertiseService("find_tool_params", &NetftUtils::findToolParams, this);
-  
-  set_max_service = n.advertiseService("set_max_values", &NetftUtils::setMax, this);
-  theshold_service = n.advertiseService("set_threshold", &NetftUtils::setThreshold, this);
   weight_bias_service = n.advertiseService("set_weight_bias", &NetftUtils::setWeightBias, this);
-  get_weight_service = n.advertiseService("get_weight", &NetftUtils::getWeight, this);
   filter_service = n.advertiseService("filter", &NetftUtils::setFilter, this);
 }
 
-void NetftUtils::setUserInput(std::string world, std::string ft, double force, double torque)
+void NetftUtils::setUserInput(std::string world, std::string ft)
 {
   world_frame = world;
   ft_frame = ft;
-  if(force != 0.0)
-  {
-    forceMaxU = force;
-  }
-  if(torque != 0.0)
-  {
-    torqueMaxU = torque;
-  }
 }
 
 void NetftUtils::update()
 {
+  /*
   
   // Check for a filter
   if(newFilter)
@@ -170,6 +154,7 @@ void NetftUtils::update()
     lp = new LPFilter(deltaTFilter,cutoffFrequency,6);   
     newFilter = false;
   }
+  */
   
   // Look up transform from ft to world frame
   tf::StampedTransform tempTransform;
@@ -187,13 +172,49 @@ void NetftUtils::update()
   tempTransform.setOrigin(tf::Vector3(0.0,0.0,0.0));
   ft_to_world = tempTransform;
 
-  checkMaxForce();
+  // Transform to world Frame
+  transformFrame(raw_data_tool, raw_data_world, 'w');
+
+  if (isBiased) // Apply the bias for a static sensor frame
+  {
+    // Get tool bias in world frame
+    geometry_msgs::WrenchStamped world_bias;  // Wrench containing the current bias data in world frame
+    transformFrame(tool_bias, world_bias, 'w');
+
+    // Add bias and apply threshold to get transformed data
+    copyWrench(raw_data_world, tf_data_world, world_bias);
+    copyWrench(raw_data_tool, tf_data_tool, tool_bias);
+  }
+  else // Just pass the data straight through
+  {
+    copyWrench(raw_data_world, tf_data_world, zero_wrench);
+    copyWrench(raw_data_tool, tf_data_tool, zero_wrench);
+  }
+
+  
+  if (isGravityBiased) // Compensate for gravity. Assumes world Z-axis is up
+  {
+      // Gravity moment = (payloadLeverArm) cross (payload force)  <== all in the sensor frame. Need to convert to world later
+      // Since it's assumed that the CoM of the payload is on the sensor's central axis, this calculation is simplified.
+      double gravMomentX = -payloadLeverArm*tf_data_tool.wrench.force.y;
+      double gravMomentY = payloadLeverArm*tf_data_tool.wrench.force.x;
+    
+      // Subtract the gravity torques from the previously-calculated wrench in the tool frame
+      tf_data_tool.wrench.torque.x = tf_data_tool.wrench.torque.x - gravMomentX;
+      tf_data_tool.wrench.torque.y = tf_data_tool.wrench.torque.y - gravMomentY;
+    
+      // Convert to world to account for the gravity force. Assumes world-Z is up.
+      //ROS_INFO_STREAM("payloadWeight: "<< payloadWeight<<" payloadLeverArm: "<<payloadLeverArm<<" tf_data_world.wrench.force.z: "<<tf_data_world.wrench.force.z);
+      transformFrame(tf_data_tool, tf_data_world, 'w');
+      tf_data_world.wrench.force.z = tf_data_world.wrench.force.z - payloadWeight;
+
+    
+      // tf_data_world now accounts for gravity completely. Convert back to the tool frame to make that data available, too
+      transformFrame(tf_data_world, tf_data_tool, 't');
+  }
 
   // Publish transformed dat
-  netft_raw_world_data_pub.publish( raw_data_world );
-  netft_world_data_pub.publish( tf_data_world );
   netft_tool_data_pub.publish( tf_data_tool );
-  netft_cancel_pub.publish( cancel_msg );
 
   ros::spinOnce();
 }
@@ -210,13 +231,6 @@ void NetftUtils::copyWrench(geometry_msgs::WrenchStamped &in, geometry_msgs::Wre
   out.wrench.torque.z = in.wrench.torque.z - bias.wrench.torque.z;
 }
 
-void NetftUtils::applyThreshold(double &value, double thresh)
-{
-  if(value <= thresh && value >= -thresh)
-  {
-    value = 0.0;
-  }
-}
 
 void NetftUtils::transformFrame(geometry_msgs::WrenchStamped in_data, geometry_msgs::WrenchStamped &out_data, char target_frame)
 {
@@ -252,89 +266,15 @@ void NetftUtils::transformFrame(geometry_msgs::WrenchStamped in_data, geometry_m
 // Runs when a new datapoint comes in
 void NetftUtils::netftCallback(const geometry_msgs::WrenchStamped::ConstPtr& data)
 {
-  // Filter data
-  std::vector<double> tempData;
-  tempData.resize(6);
-  tempData.at(0) = data->wrench.force.x;
-  tempData.at(1) = data->wrench.force.y;
-  tempData.at(2) = data->wrench.force.z;
-  tempData.at(3) = data->wrench.torque.x;
-  tempData.at(4) = data->wrench.torque.y;
-  tempData.at(5) = data->wrench.torque.z;
-
-  
-  
-  if(isFilterOn && !newFilter)
-    lp->update(tempData,tempData);
-  
-
-
   // Copy tool frame data.
   raw_data_tool.header.stamp = data->header.stamp;
   raw_data_tool.header.frame_id = ft_frame;
-  raw_data_tool.wrench.force.x = tempData.at(0);
-  raw_data_tool.wrench.force.y = tempData.at(1);
-  raw_data_tool.wrench.force.z = tempData.at(2);
-  raw_data_tool.wrench.torque.x = tempData.at(3);
-  raw_data_tool.wrench.torque.y = tempData.at(4);
-  raw_data_tool.wrench.torque.z = tempData.at(5);
-  
-  // Copy in new netft data in tool frame and transform to world frame
-  transformFrame(raw_data_tool, raw_data_world, 'w');
-
-  if (isBiased) // Apply the bias for a static sensor frame
-  {
-    
-    // Get tool bias in world frame
-    geometry_msgs::WrenchStamped world_bias;
-    transformFrame(bias, world_bias, 'w');
-    // Add bias and apply threshold to get transformed data
-    copyWrench(raw_data_world, tf_data_world, world_bias);
-    transformFrame(tf_data_world, tf_data_tool, 't');
-  }
-  else // Just pass the data straight through
-  {
-    copyWrench(raw_data_world, tf_data_world, zero_wrench);
-    copyWrench(raw_data_tool, tf_data_tool, zero_wrench);
-  }
-
-  
-  if (isGravityBiased) // Compensate for gravity. Assumes world Z-axis is up
-  {
-      // Gravity moment = (payloadLeverArm) cross (payload force)  <== all in the sensor frame. Need to convert to world later
-      // Since it's assumed that the CoM of the payload is on the sensor's central axis, this calculation is simplified.
-      double gravMomentX = -payloadLeverArm*tf_data_tool.wrench.force.y;
-      double gravMomentY = payloadLeverArm*tf_data_tool.wrench.force.x;
-    
-      // Subtract the gravity torques from the previously-calculated wrench in the tool frame
-      tf_data_tool.wrench.torque.x = tf_data_tool.wrench.torque.x - gravMomentX;
-      tf_data_tool.wrench.torque.y = tf_data_tool.wrench.torque.y - gravMomentY;
-    
-      // Convert to world to account for the gravity force. Assumes world-Z is up.
-      //ROS_INFO_STREAM("payloadWeight: "<< payloadWeight<<" payloadLeverArm: "<<payloadLeverArm<<" tf_data_world.wrench.force.z: "<<tf_data_world.wrench.force.z);
-      transformFrame(tf_data_tool, tf_data_world, 'w');
-      tf_data_world.wrench.force.z = tf_data_world.wrench.force.z - payloadWeight;
-
-    
-      // tf_data_world now accounts for gravity completely. Convert back to the tool frame to make that data available, too
-      transformFrame(tf_data_world, tf_data_tool, 't');
-  }
-
-  // Apply thresholds
-  applyThreshold(tf_data_world.wrench.force.x, threshold.wrench.force.x);
-  applyThreshold(tf_data_world.wrench.force.y, threshold.wrench.force.y);
-  applyThreshold(tf_data_world.wrench.force.z, threshold.wrench.force.z);
-  applyThreshold(tf_data_world.wrench.torque.x, threshold.wrench.torque.x);
-  applyThreshold(tf_data_world.wrench.torque.y, threshold.wrench.torque.y);
-  applyThreshold(tf_data_world.wrench.torque.z, threshold.wrench.torque.z);
-  applyThreshold(tf_data_tool.wrench.force.x, threshold.wrench.force.x);
-  applyThreshold(tf_data_tool.wrench.force.y, threshold.wrench.force.y);
-  applyThreshold(tf_data_tool.wrench.force.z, threshold.wrench.force.z);
-  applyThreshold(tf_data_tool.wrench.torque.x, threshold.wrench.torque.x);
-  applyThreshold(tf_data_tool.wrench.torque.y, threshold.wrench.torque.y);
-  applyThreshold(tf_data_tool.wrench.torque.z, threshold.wrench.torque.z);
-  //ROS_INFO_STREAM("Callback time: " << tf_data_tool.header.stamp.toSec()-ros::Time::now().toSec());
-  
+  raw_data_tool.wrench.force.x = data->wrench.force.x;
+  raw_data_tool.wrench.force.y = data->wrench.force.y;
+  raw_data_tool.wrench.force.z = data->wrench.force.z;
+  raw_data_tool.wrench.torque.x = data->wrench.torque.x;
+  raw_data_tool.wrench.torque.y = data->wrench.torque.y;
+  raw_data_tool.wrench.torque.z = data->wrench.torque.z;
 }                 
 
 // Set the readings from the sensor to zero at this instant and continue to apply the bias on future readings.
@@ -349,7 +289,7 @@ bool NetftUtils::fixedOrientationBias(netft_utils::SetBias::Request &req, netft_
 
     if(isBiased)
     {
-      copyWrench(zero_wrench, bias, zero_wrench);
+      copyWrench(zero_wrench, tool_bias, zero_wrench);
       isBiased = false;
       ROS_INFO_STREAM("Delete old bias.");
     }
@@ -377,31 +317,22 @@ bool NetftUtils::fixedOrientationBias(netft_utils::SetBias::Request &req, netft_
       ros::Duration(0.01).sleep();
     }
 
-    bias.header.stamp = tf_data_tool.header.stamp;
-    bias.header.frame_id = tf_data_tool.header.frame_id;
-    bias.wrench.force.x = fx/numMeasurments;
-    bias.wrench.force.y = fy/numMeasurments;
-    bias.wrench.force.z = fz/numMeasurments;
-    bias.wrench.torque.x = tx/numMeasurments;
-    bias.wrench.torque.y = ty/numMeasurments;
-    bias.wrench.torque.z = tz/numMeasurments;
-
-
-            
-    //copyWrench(tf_data_tool, bias, zero_wrench); // Store the current wrench readings in the 'bias' variable, to be applied hereafter
-    if(req.forceMax >= 0.0001) // if forceMax was specified and > 0
-      forceMaxB = req.forceMax;
-    if(req.torqueMax >= 0.0001)
-      torqueMaxB = req.torqueMax; // if torqueMax was specified and > 0
+    tool_bias.header.stamp = tf_data_tool.header.stamp;
+    tool_bias.header.frame_id = tf_data_tool.header.frame_id;
+    tool_bias.wrench.force.x = fx/numMeasurments;
+    tool_bias.wrench.force.y = fy/numMeasurments;
+    tool_bias.wrench.force.z = fz/numMeasurments;
+    tool_bias.wrench.torque.x = tx/numMeasurments;
+    tool_bias.wrench.torque.y = ty/numMeasurments;
+    tool_bias.wrench.torque.z = tz/numMeasurments;
     
-    //isNewBias = true;
     isBiased = true;
 
-    ROS_INFO_STREAM("Bias calibaration done! Bias: \n"  << bias.wrench );
+    ROS_INFO_STREAM("Bias calibaration done! Bias: \n"  << tool_bias.wrench );
   }               
   else            
   {               
-    copyWrench(zero_wrench, bias, zero_wrench); // Clear the stored bias if the argument was false
+    copyWrench(zero_wrench, tool_bias, zero_wrench); // Clear the stored bias if the argument was false
   }               
 
   res.success = true;
@@ -475,12 +406,12 @@ bool NetftUtils::setbiasdata(netft_utils::SetBiasData::Request &req, netft_utils
   if(req.setNew)
   {
 
-    bias.wrench.force.x = req.fx;
-    bias.wrench.force.y = req.fy;
-    bias.wrench.force.z = req.fz;
-    bias.wrench.torque.x = req.tx;
-    bias.wrench.torque.y = req.ty;
-    bias.wrench.torque.z = req.tz;
+    tool_bias.wrench.force.x = req.fx;
+    tool_bias.wrench.force.y = req.fy;
+    tool_bias.wrench.force.z = req.fz;
+    tool_bias.wrench.torque.x = req.tx;
+    tool_bias.wrench.torque.y = req.ty;
+    tool_bias.wrench.torque.z = req.tz;
       
     isNewBias = true;
     isBiased = true;
@@ -516,16 +447,7 @@ bool NetftUtils::setFilter(netft_utils::SetFilter::Request &req, netft_utils::Se
   return true;    
 }  
 
-bool NetftUtils::setMax(netft_utils::SetMax::Request &req, netft_utils::SetMax::Response &res)
-{                 
-  if(req.forceMax >= 0.0001)
-    forceMaxU = req.forceMax;
-  if(req.torqueMax >= 0.0001)
-    torqueMaxU = req.torqueMax;
-  
-  res.success = true;             
-  return true;    
-}
+
 
 bool NetftUtils::setWeightBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res)
 {           
@@ -542,78 +464,7 @@ bool NetftUtils::setWeightBias(netft_utils::SetBias::Request &req, netft_utils::
                   
   return true;    
 }  
-    
-bool NetftUtils::getWeight(netft_utils::GetDouble::Request &req, netft_utils::GetDouble::Response &res)
-{                 
-  geometry_msgs::WrenchStamped carried_weight;
-  copyWrench(raw_data_tool, carried_weight, weight_bias);
-  res.weight = pow((pow(carried_weight.wrench.force.x, 2.0) + pow(carried_weight.wrench.force.y, 2.0) + pow(carried_weight.wrench.force.z, 2.0)), 0.5)/9.81*1000;
-                  
-  return true;    
-}      
-            
-bool NetftUtils::setThreshold(netft_utils::SetThreshold::Request &req, netft_utils::SetThreshold::Response &res)
-{                 
-  threshold.wrench.force.x = req.data.wrench.force.x;
-  threshold.wrench.force.y = req.data.wrench.force.y;
-  threshold.wrench.force.z = req.data.wrench.force.z;
-  threshold.wrench.torque.x = req.data.wrench.torque.x;
-  threshold.wrench.torque.y = req.data.wrench.torque.y;
-  threshold.wrench.torque.z = req.data.wrench.torque.z;
-                  
-  res.success = true;
-                  
-  return true;    
-}
-
-void NetftUtils::checkMaxForce()
-{
-  double fMag = pow((pow(tf_data_tool.wrench.force.x, 2.0) + pow(tf_data_tool.wrench.force.y, 2.0) + pow(tf_data_tool.wrench.force.z, 2.0)), 0.5);
-  double tMag = pow((pow(tf_data_tool.wrench.torque.x, 2.0) + pow(tf_data_tool.wrench.torque.y, 2.0) + pow(tf_data_tool.wrench.torque.z, 2.0)), 0.5);
-  double fMax;
-  double tMax;
-  if(isBiased && !isNewBias)
-  {
-    fMax = forceMaxB;
-    tMax = torqueMaxB;
-  }
-  else
-  {
-    if(isBiased && isNewBias)
-    {
-      isNewBias = false;
-    }
-
-    fMax = forceMaxU; //50.0;
-    tMax = torqueMaxU; //5.0;
-  }
-
-  // If max FT exceeded, send cancel unless we have just sent it MAX_CANCEL times
-  //ROS_INFO("FMAG: %f TMAG: %f", fMag, tMag);
-  if((fabs(fMag) > fMax || fabs(tMag) > tMax) && cancel_count > 0)
-  {
-    cancel_msg.toCancel = true;
-    //ROS_INFO("Force torque violation. Canceling move.");
-    ROS_INFO("FMAG: %f FMAX: %f TMAG:%f TMAX: %f count: %d wait: %d", fMag, fMax, tMag, tMax, cancel_count, cancel_wait);
-    cancel_count-=1;
-  }
-  // If we have sent cancel MAX_CANCEL times, don't send cancel again for MAX_WAIT cycles
-  else if(cancel_count == 0 && cancel_wait > 0 && cancel_wait <= MAX_WAIT)
-  {
-    cancel_msg.toCancel = false;
-    cancel_wait-=1;  // Initialize YuMi trajectory publischer
-  ros::Publisher trajectory_pub = n.advertise<controller::Trajectory_msg>("trajectory", 1);
-
-  }
-  // If we have just finished waiting MAX_WAIT times, or the max force is no longer exceeded, reset cancel_count and cancel_wait
-  else if(cancel_wait == 0 || !(fabs(fMag) > fMax || fabs(tMag) > tMax))
-  {
-    cancel_msg.toCancel = false;
-    cancel_count = MAX_CANCEL;
-    cancel_wait = MAX_WAIT;
-  }
-}               
-                  
+       
 
 
 // procces to find exact tool data for YuMi use controller https://github.com/CRIS-Chalmers/yumi.git
@@ -624,7 +475,7 @@ bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft
 
     if(isBiased)
     {
-      copyWrench(zero_wrench, bias, zero_wrench);
+      copyWrench(zero_wrench, tool_bias, zero_wrench);
       isBiased = false;
       ROS_INFO_STREAM("Delete old bias.");
     }
@@ -633,7 +484,7 @@ bool NetftUtils::findToolParams(netft_utils::FindToolParams::Request &req, netft
     { 
       payloadWeight = 0;
       payloadLeverArm = 0;
-      copyWrench(zero_wrench, bias, zero_wrench);
+      copyWrench(zero_wrench, tool_bias, zero_wrench);
       isGravityBiased = false;
       ROS_INFO_STREAM("Delete old tool values.");
     }

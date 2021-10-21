@@ -28,7 +28,7 @@ public:
   ~NetftUtils();
 
   void initialize();
-  void setUserInput(std::string world, std::string ft, double force, double torque);
+  void setUserInput(std::string world, std::string ft);
   void update();
 
 private:
@@ -49,14 +49,13 @@ private:
   std::string ft_frame;
  
   // Wrenches used to hold force/torque and bias data
-  geometry_msgs::WrenchStamped bias;               // Wrench containing the current bias data in tool frame
+  geometry_msgs::WrenchStamped tool_bias;               // Wrench containing the current bias data in tool frame
   geometry_msgs::WrenchStamped weight_bias;        // Wrench containing the bias at a measurement pose (to measure the weight)
   geometry_msgs::WrenchStamped raw_data_world;     // Wrench containing the current raw data from the netft sensor transformed into the world frame
   geometry_msgs::WrenchStamped raw_data_tool;      // Wrench containing the current raw data from the netft sensor in the tool frame
   geometry_msgs::WrenchStamped tf_data_world;      // Wrench containing the transformed (world frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped tf_data_tool;       // Wrench containing the transformed (tool frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped zero_wrench;        // Wrench of all zeros for convenience
-  geometry_msgs::WrenchStamped threshold;          // Wrench containing thresholds
   
   double payloadWeight;				   // Used in gravity compensation
   double payloadLeverArm;			   // Used in gravity compensation. The z-coordinate to payload CoM (in sensor's raw frame)
@@ -92,13 +91,10 @@ private:
   ////////////////
   ros::ServiceServer bias_service;
   ros::ServiceServer gravity_comp_service;
-  ros::ServiceServer set_max_service;
-  ros::ServiceServer theshold_service;
   ros::ServiceServer weight_bias_service;
   ros::ServiceServer set_tool_data;
   ros::ServiceServer set_bias_data;
   ros::ServiceServer find_tool_params;
-  ros::ServiceServer get_weight_service;
   ros::ServiceServer filter_service;
 
   ////////////////////
@@ -124,17 +120,12 @@ private:
   bool settooldata(netft_utils::SetToolData::Request &req, netft_utils::SetToolData::Response &res);
   bool setbiasdata(netft_utils::SetBiasData::Request &req, netft_utils::SetBiasData::Response &res);
   
-  bool setMax(netft_utils::SetMax::Request &req, netft_utils::SetMax::Response &res);
   bool setWeightBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res);
-  bool getWeight(netft_utils::GetDouble::Request &req, netft_utils::GetDouble::Response &res);
-  bool setThreshold(netft_utils::SetThreshold::Request &req, netft_utils::SetThreshold::Response &res);
   bool setFilter(netft_utils::SetFilter::Request &req, netft_utils::SetFilter::Response &res);
 
   // Convenience methods
   void copyWrench(geometry_msgs::WrenchStamped &in, geometry_msgs::WrenchStamped &out, geometry_msgs::WrenchStamped &bias);
-  void applyThreshold(double &value, double thresh);
   void transformFrame(geometry_msgs::WrenchStamped in_data, geometry_msgs::WrenchStamped &out_data, char target_frame);
-  void checkMaxForce();
 };
 
 #endif
