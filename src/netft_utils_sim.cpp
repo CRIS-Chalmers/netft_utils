@@ -105,8 +105,7 @@ int main(int argc, char **argv)
   while ( ros::ok() )
   {
 
-    if(toSim)
-    {
+    
 
       try{
         // wait until transform is avalible 
@@ -127,6 +126,9 @@ int main(int argc, char **argv)
 
         // transform the point in the sensor frame
         listener.transformPoint(ft_frame, fixpoint_tool_tip_l_frame,	fixpoint_ft_frame);
+
+        // TODO: Finn add cable weight
+        // TODO: add noise
 
 
         //ROS_INFO_STREAM(testpoint.point);
@@ -149,12 +151,14 @@ int main(int argc, char **argv)
       }
 
       setWrench(fixpoint_ft_frame.point.x*scaling/length, fixpoint_ft_frame.point.y*scaling/length, fixpoint_ft_frame.point.z*scaling/length, 0.0, 0.0, 0.0);
-    }
-    else{
-      setWrench(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    
+    if(!toSim)
+    {
+      setWrench(0.0001, 0.0001, 0.0001, 0.0, 0.0, 0.0);
     }
 
     // Publish transformed dat
+    ROS_INFO_STREAM(simWrench);
     netft_data_pub.publish( simWrench );
   
     loop_rate.sleep();		
