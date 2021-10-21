@@ -65,7 +65,6 @@ bool startSim(netft_utils::StartSim::Request &req, netft_utils::StartSim::Respon
   fixpoint_reference_frame.point.y = req.y;
   fixpoint_reference_frame.point.z = req.z;
 
-
   toSim = true;
   return true;
 }  
