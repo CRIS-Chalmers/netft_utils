@@ -1,0 +1,4 @@
+bool setToolTip
+string toolTipFrame
+---
+bool success

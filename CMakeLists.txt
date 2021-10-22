@@ -49,6 +49,7 @@ add_service_files(
     GetDouble.srv
     StartSim.srv
     StopSim.srv
+    SetToolTipFrame.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs)

@@ -158,7 +158,7 @@ int main(int argc, char **argv)
     }
 
     // Publish transformed dat
-    ROS_INFO_STREAM(simWrench);
+    //ROS_INFO_STREAM(simWrench);
     netft_data_pub.publish( simWrench );
   
     loop_rate.sleep();		

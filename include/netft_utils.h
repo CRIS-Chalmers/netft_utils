@@ -11,6 +11,7 @@
 #include "netft_utils/SetThreshold.h"
 #include "netft_utils/SetToolData.h"
 #include "netft_utils/SetBiasData.h"
+#include "netft_utils/SetToolTipFrame.h"
 #include "netft_utils/SetFilter.h"
 #include "netft_utils/GetDouble.h"
 #include "netft_utils/Cancel.h"
@@ -47,6 +48,10 @@ private:
   tf::StampedTransform ft_to_world;                // Transform from ft frame to world frame
   std::string world_frame;
   std::string ft_frame;
+  std::string tool_tip_frame;
+
+  // tool tip frame
+  tf::StampedTransform toolTipTransform;
  
   // Wrenches used to hold force/torque and bias data
   geometry_msgs::WrenchStamped tool_bias;               // Wrench containing the current bias data in tool frame
@@ -55,6 +60,7 @@ private:
   geometry_msgs::WrenchStamped raw_data_tool;      // Wrench containing the current raw data from the netft sensor in the tool frame
   geometry_msgs::WrenchStamped tf_data_world;      // Wrench containing the transformed (world frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped tf_data_tool;       // Wrench containing the transformed (tool frame) data with bias and threshold applied
+  geometry_msgs::WrenchStamped tf_data_tool_tip;       // Wrench containing the transformed (tool frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped zero_wrench;        // Wrench of all zeros for convenience
   
   double payloadWeight;				   // Used in gravity compensation
@@ -63,18 +69,9 @@ private:
   bool isBiased;                                   // True if sensor is biased
   bool isNewBias;                                  // True if sensor was biased this pass
   bool isNewGravityBias;			   // True if gravity compensation was applied this pass
-  bool isGravityBiased;				   // True if gravity is compensated
-  
-  // Variables used to monitor FT violation and send a cancel move message
-  netft_utils::Cancel cancel_msg;
-  static const int MAX_CANCEL = 5;                 // Number of times to send cancel message when max force is exceeded
-  static const int MAX_WAIT = 100;                 // Number of cycles to wait after cancel message before sending again
-  int cancel_count;                                // Counter for times to send cancel message when max force is exceeded
-  int cancel_wait;                                 // Counter of cycles to wait after cancel message before sending again
-  double forceMaxB;                                // Default max force limit to send cancel when FT is biased
-  double torqueMaxB;                               // Default max torque limit to send cancel when FT is biased
-  double forceMaxU;                                // Default max force limit to send cancel when FT is unbiased
-  double torqueMaxU;                               // Default max torque limit to send cancel when FT is unbiased
+  bool isGravityBiased;				   // True if gravity is compensate
+  bool isDifferentToolFrame;				   // True if different Tool tip frame set
+
   
   // ROS subscribers
   ros::Subscriber raw_data_sub;
@@ -96,6 +93,7 @@ private:
   ros::ServiceServer set_bias_data;
   ros::ServiceServer find_tool_params;
   ros::ServiceServer filter_service;
+  ros::ServiceServer set_tool_tip_frame_service;
 
   ////////////////////
   // Callback methods
@@ -122,6 +120,7 @@ private:
   
   bool setWeightBias(netft_utils::SetBias::Request &req, netft_utils::SetBias::Response &res);
   bool setFilter(netft_utils::SetFilter::Request &req, netft_utils::SetFilter::Response &res);
+  bool setToolTipFrame(netft_utils::SetToolTipFrame::Request &req, netft_utils::SetToolTipFrame::Response &res);
 
   // Convenience methods
   void copyWrench(geometry_msgs::WrenchStamped &in, geometry_msgs::WrenchStamped &out, geometry_msgs::WrenchStamped &bias);

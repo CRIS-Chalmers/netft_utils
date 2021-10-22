@@ -79,14 +79,9 @@ NetftUtils::NetftUtils(ros::NodeHandle nh) :
   newFilter(false),
   isBiased(false),
   isGravityBiased(false),
+  isDifferentToolFrame(false),
   isNewBias(false),
   isNewGravityBias(false),
-  cancel_count(MAX_CANCEL),
-  cancel_wait(MAX_WAIT),
-  forceMaxB(10.0),
-  torqueMaxB(0.8),
-  forceMaxU(50.0),
-  torqueMaxU(5.0),
   payloadWeight(0.2),
   payloadLeverArm(0.2)
 {
@@ -110,8 +105,10 @@ void NetftUtils::initialize()
   zero_wrench.wrench.torque.y = 0.0;
   zero_wrench.wrench.torque.z = 0.0;
 
+  
+
   //Initialize cancel message
-  cancel_msg.toCancel = false;
+  //cancel_msg.toCancel = false
 
   //Listen to the transfomation from the ft sensor to world frame.
   listener = new tf::TransformListener(ros::Duration(300));
@@ -120,15 +117,16 @@ void NetftUtils::initialize()
   raw_data_sub = n.subscribe("netft_data",100, &NetftUtils::netftCallback, this);
 
   //Publish on the /netft_transformed_data topic. Queue up to 100000 data points
-  netft_raw_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("raw_world", 100000);
-  netft_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_world", 100000);
-  netft_tool_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_tool", 100000);
-  netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000);
+  //netft_raw_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("raw_world", 100000);
+  //netft_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_world", 100000);
+  netft_tool_data_pub = n.advertise<geometry_msgs::WrenchStamped>("tool_tip_force_l", 100);
+  //netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000);
   // Initialize YuMi trajectory publischer
-  trajectory_pub = n.advertise<controller::Trajectory_msg>("/Trajectroy", 1);
+  //trajectory_pub = n.advertise<controller::Trajectory_msg>("/Trajectroy", 1);
 
   //Advertise bias and threshold services
   bias_service = n.advertiseService("bias", &NetftUtils::fixedOrientationBias, this);
+  set_tool_tip_frame_service = n.advertiseService("set_tool_tip_frame", &NetftUtils::setToolTipFrame, this);
   gravity_comp_service = n.advertiseService("gravity_comp", &NetftUtils::compensateForGravity, this);
   set_tool_data = n.advertiseService("set_tool_data", &NetftUtils::settooldata, this);
   set_bias_data = n.advertiseService("set_bias_data", &NetftUtils::setbiasdata, this);
@@ -212,9 +210,42 @@ void NetftUtils::update()
       // tf_data_world now accounts for gravity completely. Convert back to the tool frame to make that data available, too
       transformFrame(tf_data_world, tf_data_tool, 't');
   }
+ 
+
+  if (isDifferentToolFrame) // Shift the measuremnt to the tool tip frame
+  {
+    
+    // TODO: consider torque difference.
+    tf::Vector3 tempF;
+    tf::Vector3 tempT;
+    tempF.setX(tf_data_tool.wrench.force.x);
+    tempF.setY(tf_data_tool.wrench.force.y);
+    tempF.setZ(tf_data_tool.wrench.force.z);
+    tempT.setX(tf_data_tool.wrench.torque.x);
+    tempT.setY(tf_data_tool.wrench.torque.y);
+    tempT.setZ(tf_data_tool.wrench.torque.z);
+    
+    tf_data_tool_tip.header.frame_id = tool_tip_frame;
+
+    tempF = toolTipTransform * tempF;
+    tempT = toolTipTransform * tempT;
+
+    tf_data_tool_tip.header.stamp = tf_data_tool.header.stamp;
+    tf_data_tool_tip.wrench.force.x = tempF.getX();
+    tf_data_tool_tip.wrench.force.y = tempF.getY();
+    tf_data_tool_tip.wrench.force.z = tempF.getZ();
+    tf_data_tool_tip.wrench.torque.x = tempT.getX();
+    tf_data_tool_tip.wrench.torque.y = tempT.getY();
+    tf_data_tool_tip.wrench.torque.z = tempT.getZ();
+    
+
+  }else // Just pass the data straight through
+  {
+    copyWrench(tf_data_tool, tf_data_tool_tip, zero_wrench);
+  }
 
   // Publish transformed dat
-  netft_tool_data_pub.publish( tf_data_tool );
+  netft_tool_data_pub.publish( tf_data_tool_tip );
 
   ros::spinOnce();
 }
@@ -275,7 +306,11 @@ void NetftUtils::netftCallback(const geometry_msgs::WrenchStamped::ConstPtr& dat
   raw_data_tool.wrench.torque.x = data->wrench.torque.x;
   raw_data_tool.wrench.torque.y = data->wrench.torque.y;
   raw_data_tool.wrench.torque.z = data->wrench.torque.z;
-}                 
+}               
+
+// -------------------------------------------------------------------------------------------------------------------
+// ---------------------------------- Services -----------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------
 
 // Set the readings from the sensor to zero at this instant and continue to apply the bias on future readings.
 // This doesn't account for gravity.
@@ -339,6 +374,43 @@ bool NetftUtils::fixedOrientationBias(netft_utils::SetBias::Request &req, netft_
                   
   return true;    
 }
+
+
+
+
+// Set Tool Tip frame differen from Sensor origin
+bool NetftUtils::setToolTipFrame(netft_utils::SetToolTipFrame::Request &req, netft_utils::SetToolTipFrame::Response &res)
+{
+
+  if(req.setToolTip)
+  {  
+    
+    // Look up transform from ft to world frame
+    tf::StampedTransform tempTransform;
+    try
+    {
+      listener->waitForTransform(req.toolTipFrame, ft_frame, ros::Time(0), ros::Duration(1.0));
+      listener->lookupTransform(req.toolTipFrame, ft_frame, ros::Time(0), toolTipTransform);
+
+      toolTipTransform.setOrigin(tf::Vector3(0.0,0.0,0.0));
+
+      tool_tip_frame = req.toolTipFrame;
+
+      isDifferentToolFrame = true;
+
+    }
+    catch (tf::TransformException ex)
+    {
+      ROS_ERROR("%s",ex.what());
+    }
+  } else {
+    isDifferentToolFrame = false;
+  }
+  
+  res.success = true;     
+  return true;
+}
+
 
 // Calculate the payload's mass and center of mass so gravity can be compensated for, even as the sensor changes orientation.
 // It's assumed that the payload's center of mass is located on the sensor's central access.
