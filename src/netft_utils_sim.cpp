@@ -20,6 +20,7 @@ Author: Alex von Sternberg
 #include "netft_utils/StopSim.h"
 #include "tf/transform_listener.h"
 #include <math.h>
+#include <visualization_msgs/Marker.h>
 
 /**
  * This program simulates the force torque data coming from a FT sensor
@@ -35,10 +36,12 @@ double ropeLength = 0.3;                       // minimal length of the rope in 
 double springConstant = 0.1;                   // SpringContant in Newton/Meter
 double ropeWeight = 0.01;                      // Rope weight in kg
 
+ros::Publisher marker_pub;
+
 tf::StampedTransform transform;
 geometry_msgs::PointStamped fixpoint_reference_frame;
 geometry_msgs::PointStamped fixpoint_tool_tip_l_frame;
-geometry_msgs::PointStamped fixpoint_ft_frame; 
+geometry_msgs::PointStamped fixpoint_ft_frame;
 
 void setWrench(double x, double y, double z, double rx, double ry, double rz)
 {
@@ -66,6 +69,34 @@ bool startSim(netft_utils::StartSim::Request &req, netft_utils::StartSim::Respon
   fixpoint_reference_frame.point.z = req.z;
 
   toSim = true;
+
+  
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = "/world";
+  marker.header.stamp = ros::Time::now();
+  marker.ns = "basic_shapes";
+  marker.id = 0;
+  marker.type = visualization_msgs::Marker::SPHERE;
+  marker.action = visualization_msgs::Marker::ADD;
+  marker.scale.x = 0.02;
+  marker.scale.y = 0.02;
+  marker.scale.z = 0.02;
+  marker.color.a = 1.0;
+  marker.color.r = 0.0;
+  marker.color.g = 1.0;
+  marker.color.b = 0.0;
+  marker.pose.position.x = req.x;
+  marker.pose.position.y = req.y;
+  marker.pose.position.z = req.z;
+  marker.pose.orientation.x = 0.0;
+  marker.pose.orientation.y = 0.0;
+  marker.pose.orientation.z = 0.0;
+  marker.pose.orientation.w = 1.0;
+
+  marker.lifetime = ros::Duration();
+  marker_pub.publish(marker);
+
+
   return true;
 }  
 
@@ -82,6 +113,8 @@ int main(int argc, char **argv)
   
   //Access main ROS system
   ros::NodeHandle n;
+
+  marker_pub = n.advertise<visualization_msgs::Marker>("groundTruth_marker", 1);
                   
   //Publish on the /netft_transformed_data topic. Queue up to 100000 data points
   ros::Publisher netft_data_pub = n.advertise<geometry_msgs::WrenchStamped>("netft_data", 100000);

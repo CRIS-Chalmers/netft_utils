@@ -61,6 +61,7 @@ private:
   geometry_msgs::WrenchStamped tf_data_world;      // Wrench containing the transformed (world frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped tf_data_tool;       // Wrench containing the transformed (tool frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped tf_data_tool_tip;       // Wrench containing the transformed (tool frame) data with bias and threshold applied
+  geometry_msgs::WrenchStamped tf_data_world_tip;       // Wrench containing the transformed (tool frame) data with bias and threshold applied
   geometry_msgs::WrenchStamped zero_wrench;        // Wrench of all zeros for convenience
   
   double payloadWeight;				   // Used in gravity compensation
@@ -82,6 +83,7 @@ private:
   ros::Publisher netft_tool_data_pub;
   ros::Publisher netft_cancel_pub;
   ros::Publisher trajectory_pub;
+  ros::Publisher marker_pub;
   
   ////////////////
   // ROS services

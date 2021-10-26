@@ -120,6 +120,7 @@ void NetftUtils::initialize()
   //netft_raw_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("raw_world", 100000);
   //netft_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("transformed_world", 100000);
   netft_tool_data_pub = n.advertise<geometry_msgs::WrenchStamped>("tool_tip_force_l", 100);
+  netft_world_data_pub = n.advertise<geometry_msgs::WrenchStamped>("world_tip_force_l", 100);
   //netft_cancel_pub = n.advertise<netft_utils::Cancel>("cancel", 100000);
   // Initialize YuMi trajectory publischer
   //trajectory_pub = n.advertise<controller::Trajectory_msg>("/Trajectroy", 1);
@@ -212,7 +213,7 @@ void NetftUtils::update()
   }
  
 
-  if (isDifferentToolFrame) // Shift the measuremnt to the tool tip frame
+  if (isDifferentToolFrame) // Shift the measurement to the tool tip frame
   {
     
     // TODO: consider torque difference.
@@ -244,8 +245,12 @@ void NetftUtils::update()
     copyWrench(tf_data_tool, tf_data_tool_tip, zero_wrench);
   }
 
+  
+  transformFrame(tf_data_tool, tf_data_world, 'w');
+
   // Publish transformed dat
   netft_tool_data_pub.publish( tf_data_tool_tip );
+  netft_world_data_pub.publish( tf_data_world );
 
   ros::spinOnce();
 }
