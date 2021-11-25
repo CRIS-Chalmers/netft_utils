@@ -238,6 +238,15 @@ void NetftUtils::update()
     tf_data_tool_tip.wrench.torque.x = tempT.getX();
     tf_data_tool_tip.wrench.torque.y = tempT.getY();
     tf_data_tool_tip.wrench.torque.z = tempT.getZ();
+
+
+    double degrees = 0.0;
+    n.getParam("ftSensorRotationOffset", degrees);
+
+    tf_data_tool_tip.wrench.force.x = tempF.getX() * cos(degrees) - tempF.getY() * sin(degrees);
+    tf_data_tool_tip.wrench.force.y = tempF.getX() * sin(degrees) + tempF.getY() * cos(degrees);
+
+    
     
 
   }else // Just pass the data straight through
