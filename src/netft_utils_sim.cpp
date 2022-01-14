@@ -21,6 +21,8 @@ Author: Alex von Sternberg
 #include "tf/transform_listener.h"
 #include <math.h>
 #include <visualization_msgs/Marker.h>
+#include<iostream>
+#include<cstdlib>
 
 /**
  * This program simulates the force torque data coming from a FT sensor
@@ -60,6 +62,9 @@ bool startSim(netft_utils::StartSim::Request &req, netft_utils::StartSim::Respon
   
   ropeLength = req.ropeLength;
   springConstant = req.springConstant;
+  ros::param::set("/groundTruth_springConstant", springConstant);
+
+
   ropeWeight = req.ropeWeight;
 
   reference_frame = req.frame;
@@ -128,6 +133,8 @@ int main(int argc, char **argv)
   
   ros::Rate loop_rate(400);
 
+  std::srand(std::time(0));
+
   //Initialize variables
   fixpoint_reference_frame.header.frame_id = reference_frame;
   fixpoint_reference_frame.header.stamp  = ros::Time(0); //ros::Time::now();
@@ -183,7 +190,7 @@ int main(int argc, char **argv)
         scaling = springConstant * (length - ropeLength);
       }
 
-      setWrench(fixpoint_ft_frame.point.x*scaling/length, fixpoint_ft_frame.point.y*scaling/length, fixpoint_ft_frame.point.z*scaling/length, 0.0, 0.0, 0.0);
+      setWrench(fixpoint_ft_frame.point.x*scaling/length + ((std::rand()%1000)-500)/2000.0, fixpoint_ft_frame.point.y*scaling/length + ((std::rand()%1000)-500)/2000.0, fixpoint_ft_frame.point.z*scaling/length + ((std::rand()%1000)-500)/2000.0, 0.0, 0.0, 0.0);
     
     if(!toSim)
     {

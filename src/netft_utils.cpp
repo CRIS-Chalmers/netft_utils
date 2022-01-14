@@ -219,8 +219,10 @@ void NetftUtils::update()
     // TODO: consider torque difference.
     tf::Vector3 tempF;
     tf::Vector3 tempT;
+    double factor = 0.0;
+    n.getParam("ftSensorYfactor", factor);
     tempF.setX(tf_data_tool.wrench.force.x);
-    tempF.setY(tf_data_tool.wrench.force.y);
+    tempF.setY(tf_data_tool.wrench.force.y*factor);
     tempF.setZ(tf_data_tool.wrench.force.z);
     tempT.setX(tf_data_tool.wrench.torque.x);
     tempT.setY(tf_data_tool.wrench.torque.y);
