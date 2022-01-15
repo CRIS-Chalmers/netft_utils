@@ -30,7 +30,7 @@ Author: Alex von Sternberg
 std::string world_frame = "world";
 std::string reference_frame = "yumi_base_link";
 std::string ft_frame = "ftsensor_l";
-std::string tool_tip_l_frame = "yumi_tool_tip_l";
+std::string tool_tip_l_frame = "yumi_grip_l";
 
 geometry_msgs::WrenchStamped simWrench;        // Wrench containing the simulated data
 bool toSim = false;                            // True if we should output simulated data
