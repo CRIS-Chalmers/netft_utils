@@ -190,7 +190,7 @@ int main(int argc, char **argv)
         scaling = springConstant * (length - ropeLength);
       }
 
-      setWrench(fixpoint_ft_frame.point.x*scaling/length + ((std::rand()%1000)-500)/2000.0, fixpoint_ft_frame.point.y*scaling/length + ((std::rand()%1000)-500)/2000.0, fixpoint_ft_frame.point.z*scaling/length + ((std::rand()%1000)-500)/2000.0, 0.0, 0.0, 0.0);
+      setWrench(fixpoint_ft_frame.point.x*scaling/length + ((std::rand()%1000)-500)/6000.0, fixpoint_ft_frame.point.y*scaling/length + ((std::rand()%1000)-500)/6000.0, fixpoint_ft_frame.point.z*scaling/length + ((std::rand()%1000)-500)/6000.0, 0.0, 0.0, 0.0);
     
     if(!toSim)
     {
